@@ -49,7 +49,7 @@ from s_n import SymmetricGroup, make_batch                        # noqa: E402
 
 
 @torch.no_grad()
-def eval_length_sweep(model, group, lengths, cfg, batches=20):
+def eval_length_sweep(model, group, lengths, cfg, generators="all", batches=20):
     """Mean (over all positions) token accuracy at each eval length.
 
     NOTE: this average DILUTES extrapolation -- in a long eval, positions past
@@ -60,7 +60,7 @@ def eval_length_sweep(model, group, lengths, cfg, batches=20):
     for L in lengths:
         correct = total = 0
         for _ in range(batches):
-            x, y = make_batch(group, cfg.batch_size, L, cfg.device)
+            x, y = make_batch(group, cfg.batch_size, L, cfg.device, generators=generators)
             logits = model(x, zn, 0.0)[0]                         # (B,T,vocab)
             pred = logits.argmax(-1)
             correct += (pred == y).sum().item()
@@ -70,7 +70,7 @@ def eval_length_sweep(model, group, lengths, cfg, batches=20):
 
 
 @torch.no_grad()
-def eval_position_profile(model, group, length, cfg, batches=20):
+def eval_position_profile(model, group, length, cfg, generators="all", batches=20):
     """Per-POSITION accuracy within one length-`length` sequence (mean over batches).
 
     This is the decisive length-generalization view: a model trained at train_len
@@ -81,7 +81,7 @@ def eval_position_profile(model, group, length, cfg, batches=20):
     correct = torch.zeros(length, dtype=torch.float64)
     n = 0
     for _ in range(batches):
-        x, y = make_batch(group, cfg.batch_size, length, cfg.device)
+        x, y = make_batch(group, cfg.batch_size, length, cfg.device, generators=generators)
         pred = model(x, zn, 0.0)[0].argmax(-1)                   # (B,T)
         correct += (pred == y).float().sum(0).double().cpu()     # per-position hits
         n += x.shape[0]
@@ -119,7 +119,7 @@ def _fmt_profile(acc_per_pos, train_max):
     return " ".join(segs)
 
 
-def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False):
+def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False, generators="all"):
     vocab = group.size
     model = SpikingM2RNN(vocab, dim=cfg.dim, depth=cfg.depth, k=cfg.k_dim, v=cfg.v_dim,
                          mlp=cfg.mlp_dim, mode=cfg.mode, threshold=cfg.threshold,
@@ -140,9 +140,10 @@ def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False):
     train_max = max(train_lens)
     profile_len = max(eval_lens)
     nparams = sum(p.numel() for p in model.P.values())
+    ngen = group.size if generators == "all" else len(generators)
     print(f"task=S{group.n} vocab={vocab} mode={cfg.mode} params={nparams:,} "
           f"pop={cfg.pop_size} sigma={cfg.sigma} decay={cfg.decay} "
-          f"train_lens={train_lens} eval_lens={eval_lens} device={cfg.device}")
+          f"train_lens={train_lens} eval_lens={eval_lens} gens={ngen} device={cfg.device}")
     chance = 1.0 / vocab
     print(f"(chance accuracy = {chance*100:.2f}%; profile '|' marks the train/extrapolation "
           f"boundary at pos {train_max}; compile={'on' if compile else 'OFF (perf)'})")
@@ -152,7 +153,7 @@ def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False):
         # variable-length training: a single fixed length overfits to that length,
         # so sample one of train_lens each step (the standard length-gen recipe).
         tl = train_lens[torch.randint(len(train_lens), (1,), generator=rng).item()]
-        x, y = make_batch(group, cfg.batch_size, tl, cfg.device)
+        x, y = make_batch(group, cfg.batch_size, tl, cfg.device, generators=generators)
         noise = model.sample_noise(cfg.pop_size, cfg.rank, cfg.device, cfg.dtype)
         with torch.no_grad():
             if cfg.chunk is None:
@@ -168,8 +169,8 @@ def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False):
         es_update(model.P, noise, fit, coeff, cfg.rank_scale)
 
         if step == 1 or step % eval_every == 0:
-            acc = eval_length_sweep(model, group, eval_lens, cfg)
-            prof = eval_position_profile(model, group, profile_len, cfg)
+            acc = eval_length_sweep(model, group, eval_lens, cfg, generators)
+            prof = eval_position_profile(model, group, profile_len, cfg, generators)
             print(f"step {step:05d} | loss {loss.min().item():.3f} | mean {_fmt_sweep(acc)}")
             print(f"            pos@L{profile_len}: {_fmt_profile(prof, train_max)}")
 
@@ -185,6 +186,11 @@ def _cli():
                     help="sample one per step (variable length => length generalization). "
                          "Pass a single value to reproduce fixed-length training.")
     ap.add_argument("--eval-lens", type=int, nargs="+", default=[16, 32, 64, 128, 256])
+    ap.add_argument("--generators", choices=["min", "all"], default="min",
+                    help="input alphabet: 'min' = a 2-element generating set (the standard "
+                         "word problem — tractable: learn 2 transitions, state still spans the "
+                         "whole group); 'all' = sample from all n! perms (must learn the FULL "
+                         "Cayley table — far harder, was pinning ES at chance).")
     ap.add_argument("--pop", type=int, default=config.POP_SIZE)
     ap.add_argument("--sigma", type=float, default=config.SIGMA)
     ap.add_argument("--decay", type=float, default=1.0,
@@ -199,8 +205,8 @@ def _cli():
     ap.add_argument("--v", type=int, default=config.V_DIM)
     ap.add_argument("--mlp", type=int, default=config.MLP_DIM)
     ap.add_argument("--compile", action="store_true",
-                    help="opt into torch.compile (OFF by default — it returns WRONG "
-                         "results across this task's many seq lengths; see train()).")
+                    help="opt into torch.compile (OFF by default for perf on this "
+                         "many-length workload; correct either way — see train()).")
     args = ap.parse_args()
 
     cfg = dataclasses.replace(
@@ -209,8 +215,9 @@ def _cli():
         dim=args.dim, depth=args.depth, k_dim=args.k, v_dim=args.v, mlp_dim=args.mlp,
     )
     group = SymmetricGroup(args.n)
+    generators = "all" if args.generators == "all" else group.default_generators()
     train(group, args.train_lens, args.eval_lens, args.steps, args.eval_every,
-          cfg, compile=args.compile)
+          cfg, compile=args.compile, generators=generators)
 
 
 if __name__ == "__main__":

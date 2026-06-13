@@ -56,15 +56,18 @@ non-linear RNN can).
 
 ```bash
 python tasks/state_tracking/s_n.py                          # generator self-check
-python tasks/state_tracking/train_sn.py --n 5 --mode tanh   # run the CONTROL first
+python tasks/state_tracking/train_sn.py --n 3 --mode tanh   # S3 CONTROL first (confirm it learns)
+python tasks/state_tracking/train_sn.py --n 5 --mode tanh   # then climb to S5
 python tasks/state_tracking/train_sn.py --n 5 --mode spike --decay 1.0
 ```
-Trains on **variable lengths** (`--train-lens 8 16 24 32`, the length-gen recipe) and
-prints two eval views: `mean Lk` (averaged accuracy — dilutes extrapolation) and the
-decisive `pos@Lk` per-position profile, where `|` marks the train/extrapolation
-boundary — flat across `|` = generalizing, a cliff = overfit to length. Defaults bake
-in the method notes (tanh first; `decay=1.0` non-leaky IF, since 0.9 erases state —
-DESIGN §6.4). Full knob list: [tasks/state_tracking/README.md](tasks/state_tracking/README.md).
+Input alphabet defaults to a **2-element generating set** (`--generators min`, the
+tractable standard word problem); `all` forces learning the full Cayley table and pins
+ES at chance. ES is sample-hungry and **S5 is the hardest group**, so confirm learning
+on S3 before climbing. Trains on **variable lengths** (`--train-lens 8 16 24 32`) and
+prints two eval views: `mean Lk` (averaged — dilutes extrapolation) and the decisive
+`pos@Lk` per-position profile, where `|` marks the train/extrapolation boundary — flat
+across `|` = generalizing, a cliff = overfit to length. Full knob list +
+difficulty-ladder tips: [tasks/state_tracking/README.md](tasks/state_tracking/README.md).
 
 ---
 

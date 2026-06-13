@@ -20,10 +20,23 @@ python tasks/state_tracking/s_n.py                          # generator self-che
 python tasks/state_tracking/train_sn.py --n 5 --mode tanh   # CONTROL first
 python tasks/state_tracking/train_sn.py --n 5 --mode spike --decay 1.0
 ```
-Key knobs: `--train-lens 8 16 24 32` (variable-length training — see below),
-`--eval-lens 16 32 64 128 256`, `--pop --sigma --decay --threshold`, model size
-`--dim --depth --k --v --mlp`, `--chunk` (OOM relief). S3 (`--n 3`, solvable warm-up)
-vs S5 (`--n 5`, NC1-complete).
+Key knobs: `--generators {min,all}` (input alphabet — see below), `--train-lens 8 16 24 32`
+(variable-length training — see below), `--eval-lens 16 32 64 128 256`,
+`--pop --sigma --decay --threshold`, model size `--dim --depth --k --v --mlp`,
+`--chunk` (OOM relief). S3 (`--n 3`, solvable warm-up) vs S5 (`--n 5`, NC1-complete).
+
+**`--generators` is the difficulty dial.** `min` (default) draws inputs from a fixed
+**2-element generating set** — the model only has to learn 2 transition functions, yet
+the reachable state still spans the whole group. This is the standard word problem and
+the tractable, theory-relevant task. `all` draws from all `n!` permutations, forcing the
+model to learn the **entire Cayley table** — far harder, and observed to pin ES at chance
+on S5. Use `min`.
+
+**Difficulty ladder (ES is sample-hungry, S5 is the hardest):** confirm learning on
+**S3 `min`** first (chance 16.7%), then climb to S4/S5. If a run sits at chance with a
+flat loss, the landscape gives no signal — shrink the model (DESIGN §8, lower ES
+variance), raise `--pop`, shorten `--train-lens`, or step down a group before adding
+training steps.
 
 > **`torch.compile` is OFF by default here (perf, not correctness).** This task feeds
 > many sequence lengths, which thrashes compile's recompile budget for little benefit
