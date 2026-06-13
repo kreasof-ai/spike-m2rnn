@@ -47,7 +47,11 @@ from s_n import SymmetricGroup, make_batch                        # noqa: E402
 
 @torch.no_grad()
 def eval_length_sweep(model, group, lengths, cfg, batches=20):
-    """Per-position token accuracy at each eval length (mean over `batches`)."""
+    """Mean (over all positions) token accuracy at each eval length.
+
+    NOTE: this average DILUTES extrapolation -- in a long eval, positions past
+    train_len are pure extrapolation and dominate the count. Read it alongside the
+    position profile below, which is the real length-generalization view."""
     zn = model.zero_noise(cfg.device, cfg.dtype)
     acc = {}
     for L in lengths:
@@ -62,11 +66,57 @@ def eval_length_sweep(model, group, lengths, cfg, batches=20):
     return acc
 
 
-def _fmt(acc):
+@torch.no_grad()
+def eval_position_profile(model, group, length, cfg, batches=20):
+    """Per-POSITION accuracy within one length-`length` sequence (mean over batches).
+
+    This is the decisive length-generalization view: a model trained at train_len
+    has only seen positions 0..train_len-1, so positions >= train_len here are pure
+    extrapolation. A true FSA holds flat across the boundary; an overfit-to-length
+    model cliffs at train_len."""
+    zn = model.zero_noise(cfg.device, cfg.dtype)
+    correct = torch.zeros(length, dtype=torch.float64)
+    n = 0
+    for _ in range(batches):
+        x, y = make_batch(group, cfg.batch_size, length, cfg.device)
+        pred = model(x, zn, 0.0)[0].argmax(-1)                   # (B,T)
+        correct += (pred == y).float().sum(0).double().cpu()     # per-position hits
+        n += x.shape[0]
+    return correct / n                                           # (length,) accuracy per position
+
+
+def _bucket_bounds(length, train_max):
+    """Position buckets with the first cut at train_max, then doubling: the train
+    boundary is explicit so the cliff (if any) is obvious."""
+    bounds, b = [0], max(1, train_max)
+    while b < length:
+        bounds.append(b); b *= 2
+    bounds.append(length)
+    # dedupe + clamp, keep strictly increasing
+    out = []
+    for v in bounds:
+        v = min(v, length)
+        if not out or v > out[-1]:
+            out.append(v)
+    return out
+
+
+def _fmt_sweep(acc):
     return "  ".join(f"L{L}:{a*100:5.1f}%" for L, a in acc.items())
 
 
-def train(group, train_len, eval_lens, steps, eval_every, cfg, compile=True):
+def _fmt_profile(acc_per_pos, train_max):
+    L = len(acc_per_pos)
+    bounds = _bucket_bounds(L, train_max)
+    segs = []
+    for lo, hi in zip(bounds[:-1], bounds[1:]):
+        m = acc_per_pos[lo:hi].mean().item() * 100
+        mark = "|" if lo == train_max else ""   # mark the train/extrapolation boundary
+        segs.append(f"{mark}[{lo}:{hi}){m:4.0f}%")
+    return " ".join(segs)
+
+
+def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=True):
     vocab = group.size
     model = SpikingM2RNN(vocab, dim=cfg.dim, depth=cfg.depth, k=cfg.k_dim, v=cfg.v_dim,
                          mlp=cfg.mlp_dim, mode=cfg.mode, threshold=cfg.threshold,
@@ -75,15 +125,23 @@ def train(group, train_len, eval_lens, steps, eval_every, cfg, compile=True):
     if compile:
         model = torch.compile(model)
     coeff = cfg.coeff
+    train_lens = sorted(set(train_lens))
+    train_max = max(train_lens)
+    profile_len = max(eval_lens)
     nparams = sum(p.numel() for p in model.P.values())
     print(f"task=S{group.n} vocab={vocab} mode={cfg.mode} params={nparams:,} "
           f"pop={cfg.pop_size} sigma={cfg.sigma} decay={cfg.decay} "
-          f"train_len={train_len} eval_lens={eval_lens} device={cfg.device}")
+          f"train_lens={train_lens} eval_lens={eval_lens} device={cfg.device}")
     chance = 1.0 / vocab
-    print(f"(chance accuracy = {chance*100:.2f}%)")
+    print(f"(chance accuracy = {chance*100:.2f}%; profile '|' marks the train/extrapolation "
+          f"boundary at pos {train_max})")
 
+    rng = torch.Generator(device="cpu")
     for step in range(1, steps + 1):
-        x, y = make_batch(group, cfg.batch_size, train_len, cfg.device)
+        # variable-length training: a single fixed length overfits to that length,
+        # so sample one of train_lens each step (the standard length-gen recipe).
+        tl = train_lens[torch.randint(len(train_lens), (1,), generator=rng).item()]
+        x, y = make_batch(group, cfg.batch_size, tl, cfg.device)
         noise = model.sample_noise(cfg.pop_size, cfg.rank, cfg.device, cfg.dtype)
         with torch.no_grad():
             if cfg.chunk is None:
@@ -100,7 +158,9 @@ def train(group, train_len, eval_lens, steps, eval_every, cfg, compile=True):
 
         if step == 1 or step % eval_every == 0:
             acc = eval_length_sweep(model, group, eval_lens, cfg)
-            print(f"step {step:05d} | train(min loss) {loss.min().item():.3f} | {_fmt(acc)}")
+            prof = eval_position_profile(model, group, profile_len, cfg)
+            print(f"step {step:05d} | loss {loss.min().item():.3f} | mean {_fmt_sweep(acc)}")
+            print(f"            pos@L{profile_len}: {_fmt_profile(prof, train_max)}")
 
 
 def _cli():
@@ -110,7 +170,9 @@ def _cli():
                     help="run tanh control FIRST; then spike")
     ap.add_argument("--steps", type=int, default=5000)
     ap.add_argument("--eval-every", type=int, default=100)
-    ap.add_argument("--train-len", type=int, default=32)
+    ap.add_argument("--train-lens", type=int, nargs="+", default=[8, 16, 24, 32],
+                    help="sample one per step (variable length => length generalization). "
+                         "Pass a single value to reproduce fixed-length training.")
     ap.add_argument("--eval-lens", type=int, nargs="+", default=[16, 32, 64, 128, 256])
     ap.add_argument("--pop", type=int, default=config.POP_SIZE)
     ap.add_argument("--sigma", type=float, default=config.SIGMA)
@@ -134,7 +196,7 @@ def _cli():
         dim=args.dim, depth=args.depth, k_dim=args.k, v_dim=args.v, mlp_dim=args.mlp,
     )
     group = SymmetricGroup(args.n)
-    train(group, args.train_len, args.eval_lens, args.steps, args.eval_every,
+    train(group, args.train_lens, args.eval_lens, args.steps, args.eval_every,
           cfg, compile=not args.no_compile)
 
 

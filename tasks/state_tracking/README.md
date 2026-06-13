@@ -20,16 +20,28 @@ python tasks/state_tracking/s_n.py                          # generator self-che
 python tasks/state_tracking/train_sn.py --n 5 --mode tanh   # CONTROL first
 python tasks/state_tracking/train_sn.py --n 5 --mode spike --decay 1.0
 ```
-Key knobs: `--train-len 32 --eval-lens 16 32 64 128 256` (the generalization sweep),
-`--pop --sigma --decay --threshold`, model size `--dim --depth --k --v --mlp`,
-`--chunk` (OOM relief), `--no-compile`. S3 (`--n 3`, solvable warm-up) vs S5
-(`--n 5`, NC1-complete).
+Key knobs: `--train-lens 8 16 24 32` (variable-length training — see below),
+`--eval-lens 16 32 64 128 256`, `--pop --sigma --decay --threshold`, model size
+`--dim --depth --k --v --mlp`, `--chunk` (OOM relief), `--no-compile`. S3 (`--n 3`,
+solvable warm-up) vs S5 (`--n 5`, NC1-complete).
 
 ## What "passing" means: length generalization
 **Train at short T, eval at longer T.** A true FSA holds accuracy ~flat as T grows;
-a positional-shortcut learner collapses past the training length. The eval prints
-per-position token accuracy at each `--eval-lens`. Reproduce M2RNN's
+a positional-shortcut learner collapses past the training length. Reproduce M2RNN's
 perfect-generalization plot — this is what the spiking thesis must clear.
+
+Two eval views are printed each `--eval-every`:
+- `mean Lk: …` — accuracy averaged over **all** positions at length k. **Dilutes**
+  extrapolation (in a long eval, positions past train length dominate the count), so
+  read it only as a coarse summary.
+- `pos@Lk: [a:b)…% |[b:c)…%` — the **decisive** view: accuracy per position *bucket*
+  inside one length-k sequence. The `|` marks the train/extrapolation boundary (max
+  train length). Flat across `|` = generalizing; a cliff at `|` = overfit to length.
+
+**Variable-length training matters.** Training at a single fixed length is the
+textbook way to *prevent* length generalization (the model latches onto length cues),
+so `--train-lens` samples one length per step by default. Pass a single value to
+reproduce fixed-length training as a contrast.
 
 ## Method notes (baked into `train_sn.py` defaults)
 1. **Run `--mode tanh` first** as the control — its learnable forget gate can hold
