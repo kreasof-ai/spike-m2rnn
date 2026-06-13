@@ -22,8 +22,12 @@ Method notes baked into the defaults:
     0.9 (~7-step half-life) is FATAL for long-range tracking (DESIGN 6.4). Only
     affects spike mode (tanh uses its forget gate).
   * NoPE + a sequential recurrence => the model runs at ANY length, so eval at
-    lengths far past training is well-defined. torch.compile recompiles per length
-    (benign).
+    lengths far past training is well-defined.
+  * COMPILE IS OFF BY DEFAULT. This task feeds many sequence lengths; torch.compile
+    blows its recompile budget and was observed returning WRONG results at the unseen
+    eval lengths (the forward is provably causal in eager — see _diag_causal.py — yet
+    the compiled run had mean-L16 != pos[0:32)@L256). Opt in with --compile only after
+    verifying against eager.
 """
 
 import argparse
@@ -116,13 +120,22 @@ def _fmt_profile(acc_per_pos, train_max):
     return " ".join(segs)
 
 
-def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=True):
+def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False):
     vocab = group.size
     model = SpikingM2RNN(vocab, dim=cfg.dim, depth=cfg.depth, k=cfg.k_dim, v=cfg.v_dim,
                          mlp=cfg.mlp_dim, mode=cfg.mode, threshold=cfg.threshold,
                          decay=cfg.decay).to(cfg.device).to(cfg.dtype)
     model.eval(); model.requires_grad_(False)
     if compile:
+        # CORRECTNESS WARNING: this task feeds MANY sequence lengths (train_lens +
+        # eval_lens + pop=1 at eval). That blows torch.compile's recompile budget and
+        # we observed it returning WRONG results at the unseen eval lengths (the
+        # forward is provably causal in eager, yet compiled mean-L16 != pos[0:32)@L256).
+        # So compile is OFF by default here; if you opt in, raise the budget and verify
+        # against eager (tasks/state_tracking/_diag_causal.py).
+        import torch._dynamo as dynamo
+        dynamo.config.recompile_limit = max(getattr(dynamo.config, "recompile_limit", 8), 128)
+        dynamo.config.capture_scalar_outputs = True
         model = torch.compile(model)
     coeff = cfg.coeff
     train_lens = sorted(set(train_lens))
@@ -134,7 +147,7 @@ def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=True):
           f"train_lens={train_lens} eval_lens={eval_lens} device={cfg.device}")
     chance = 1.0 / vocab
     print(f"(chance accuracy = {chance*100:.2f}%; profile '|' marks the train/extrapolation "
-          f"boundary at pos {train_max})")
+          f"boundary at pos {train_max}; compile={'on' if compile else 'OFF (correctness)'})")
 
     rng = torch.Generator(device="cpu")
     for step in range(1, steps + 1):
@@ -187,7 +200,9 @@ def _cli():
     ap.add_argument("--k", type=int, default=config.K_DIM)
     ap.add_argument("--v", type=int, default=config.V_DIM)
     ap.add_argument("--mlp", type=int, default=config.MLP_DIM)
-    ap.add_argument("--no-compile", action="store_true")
+    ap.add_argument("--compile", action="store_true",
+                    help="opt into torch.compile (OFF by default — it returns WRONG "
+                         "results across this task's many seq lengths; see train()).")
     args = ap.parse_args()
 
     cfg = dataclasses.replace(
@@ -197,7 +212,7 @@ def _cli():
     )
     group = SymmetricGroup(args.n)
     train(group, args.train_lens, args.eval_lens, args.steps, args.eval_every,
-          cfg, compile=not args.no_compile)
+          cfg, compile=args.compile)
 
 
 if __name__ == "__main__":

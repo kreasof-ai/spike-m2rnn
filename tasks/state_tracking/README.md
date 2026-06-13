@@ -22,8 +22,16 @@ python tasks/state_tracking/train_sn.py --n 5 --mode spike --decay 1.0
 ```
 Key knobs: `--train-lens 8 16 24 32` (variable-length training — see below),
 `--eval-lens 16 32 64 128 256`, `--pop --sigma --decay --threshold`, model size
-`--dim --depth --k --v --mlp`, `--chunk` (OOM relief), `--no-compile`. S3 (`--n 3`,
-solvable warm-up) vs S5 (`--n 5`, NC1-complete).
+`--dim --depth --k --v --mlp`, `--chunk` (OOM relief). S3 (`--n 3`, solvable warm-up)
+vs S5 (`--n 5`, NC1-complete).
+
+> **`torch.compile` is OFF by default here, deliberately.** This task feeds many
+> sequence lengths; compile blows its recompile budget and was observed returning
+> **wrong results** at the unseen eval lengths (the forward is provably causal in
+> eager — `_diag_causal.py` — yet a compiled run showed `mean L16` ≠ `pos[0:32)@L256`,
+> which is impossible for a causal model). The recurrence is a sequential Python loop,
+> so compile buys little. `--compile` opts in (raises the recompile budget) — verify
+> against eager first.
 
 ## What "passing" means: length generalization
 **Train at short T, eval at longer T.** A true FSA holds accuracy ~flat as T grows;
