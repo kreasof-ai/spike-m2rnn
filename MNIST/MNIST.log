@@ -1,0 +1,64 @@
+--- Epoch 1 ---
+batch 000 | min 2.2896 | mean 2.3826
+batch 100 | min 1.5506 | mean 1.5980
+batch 200 | min 1.1536 | mean 1.1865
+batch 300 | min 0.7953 | mean 0.8334
+batch 400 | min 1.0653 | mean 1.1253
+batch 500 | min 1.1496 | mean 1.2136
+batch 600 | min 0.9568 | mean 0.9975
+batch 700 | min 1.4384 | mean 1.5068
+batch 800 | min 0.8394 | mean 0.9031
+batch 900 | min 1.2949 | mean 1.3606
+--> epoch 1 val acc: 69.37%
+
+--- Epoch 2 ---
+batch 000 | min 0.7392 | mean 0.7853
+batch 100 | min 0.7758 | mean 0.8188
+batch 200 | min 1.1361 | mean 1.2071
+batch 300 | min 0.6849 | mean 0.7335
+batch 400 | min 0.9759 | mean 1.0556
+batch 500 | min 1.1055 | mean 1.1723
+batch 600 | min 0.8239 | mean 0.8748
+batch 700 | min 0.8151 | mean 0.8860
+batch 800 | min 0.7924 | mean 0.8361
+batch 900 | min 0.6830 | mean 0.7420
+--> epoch 2 val acc: 75.10%
+
+--- Epoch 3 ---
+batch 000 | min 0.8334 | mean 0.8906
+batch 100 | min 0.5702 | mean 0.6437
+batch 200 | min 0.4616 | mean 0.4962
+batch 300 | min 0.5999 | mean 0.6669
+batch 400 | min 0.8202 | mean 0.8831
+batch 500 | min 0.6608 | mean 0.7110
+batch 600 | min 0.4717 | mean 0.5059
+batch 700 | min 0.7157 | mean 0.7668
+batch 800 | min 0.4251 | mean 0.4665
+batch 900 | min 0.6054 | mean 0.6700
+--> epoch 3 val acc: 73.39%
+
+--- Epoch 4 ---
+batch 000 | min 0.6002 | mean 0.6503
+batch 100 | min 0.7782 | mean 0.8488
+batch 200 | min 0.7269 | mean 0.7735
+batch 300 | min 0.5356 | mean 0.5795
+batch 400 | min 0.8382 | mean 0.9615
+batch 500 | min 0.9232 | mean 0.9670
+batch 600 | min 0.5178 | mean 0.5636
+batch 700 | min 0.5389 | mean 0.5884
+batch 800 | min 0.3090 | mean 0.3356
+batch 900 | min 0.5974 | mean 0.6365
+--> epoch 4 val acc: 78.96%
+
+--- Epoch 5 ---
+batch 000 | min 0.8415 | mean 0.8822
+batch 100 | min 0.3438 | mean 0.3790
+batch 200 | min 0.2992 | mean 0.3208
+batch 300 | min 0.6397 | mean 0.6733
+batch 400 | min 0.2555 | mean 0.2921
+batch 500 | min 0.4817 | mean 0.5139
+batch 600 | min 0.4634 | mean 0.4989
+batch 700 | min 0.4830 | mean 0.5170
+batch 800 | min 0.2953 | mean 0.3503
+batch 900 | min 0.5545 | mean 0.6206
+--> epoch 5 val acc: 81.27%

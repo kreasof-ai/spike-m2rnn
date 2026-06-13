@@ -1,0 +1,45 @@
+mode=spike params=224,449 pop=512 sigma=0.05 block=64 dim=128 K=64 V=64 device=cuda
+W0613 10:49:22.752000 2705 torch/_inductor/utils.py:1731] [0/0] Not enough SMs to use max_autotune_gemm mode
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1] Graph break from `Tensor.item()`, consider setting:
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1]     torch._dynamo.config.capture_scalar_outputs = True
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1] or:
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1]     env TORCHDYNAMO_CAPTURE_SCALAR_OUTPUTS=1
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1] to include these operations in the captured graph.
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1] 
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1] Graph break: from user code at:
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1]   File "/tmp/ipykernel_2705/192093932.py", line 206, in forward
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1]     fire_acc += S.mean().item(); fire_n += 1
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1] 
+W0613 10:50:16.961000 2705 torch/_dynamo/variables/tensor.py:1379] [0/1] 
+W0613 10:50:26.810000 2705 torch/_dynamo/convert_frame.py:1743] [1/8] torch._dynamo hit config.recompile_limit (8)
+W0613 10:50:26.810000 2705 torch/_dynamo/convert_frame.py:1743] [1/8]    function: '_lin' (/tmp/ipykernel_2705/192093932.py:160)
+W0613 10:50:26.810000 2705 torch/_dynamo/convert_frame.py:1743] [1/8]    last reason: 1/7: tensor 'x' size mismatch at index 3. expected 256, actual 128
+W0613 10:50:26.810000 2705 torch/_dynamo/convert_frame.py:1743] [1/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0613 10:50:26.810000 2705 torch/_dynamo/convert_frame.py:1743] [1/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+step 00001 | train(min) 4.246 | val 4.087 (5.90 bpc) | fire 0.188
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8] torch._dynamo hit config.recompile_limit (8)
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8]    function: '_ln' (/tmp/ipykernel_2705/192093932.py:165)
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8]    last reason: 2/7: name == 'block1_ln1'                                     # return eggroll_ln(x, self.P[name + "_g"], noise[name + "_g"],  # mp/ipykernel_2705/192093932.py:166 in _ln
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8] User stack trace:
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8]   File "/tmp/ipykernel_2705/192093932.py", line 166, in _ln
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8]     return eggroll_ln(x, self.P[name + "_g"], noise[name + "_g"],
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W0613 10:50:34.168000 2705 torch/_dynamo/convert_frame.py:1743] [2/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+step 00100 | train(min) 3.269 | val 3.324 (4.79 bpc) | fire 0.247
+step 00200 | train(min) 3.263 | val 3.292 (4.75 bpc) | fire 0.271
+step 00300 | train(min) 3.086 | val 3.232 (4.66 bpc) | fire 0.305
+step 00400 | train(min) 3.098 | val 3.203 (4.62 bpc) | fire 0.303
+step 00500 | train(min) 3.122 | val 3.132 (4.52 bpc) | fire 0.314
+step 00600 | train(min) 3.127 | val 3.098 (4.47 bpc) | fire 0.319
+step 00700 | train(min) 3.056 | val 3.095 (4.46 bpc) | fire 0.322
+step 00800 | train(min) 3.015 | val 3.031 (4.37 bpc) | fire 0.333
+step 00900 | train(min) 2.996 | val 3.004 (4.33 bpc) | fire 0.332
+step 01000 | train(min) 3.007 | val 2.997 (4.32 bpc) | fire 0.331
+step 01100 | train(min) 3.026 | val 3.009 (4.34 bpc) | fire 0.343
+step 01200 | train(min) 2.868 | val 2.967 (4.28 bpc) | fire 0.336
+step 01300 | train(min) 2.931 | val 2.975 (4.29 bpc) | fire 0.333
+step 01400 | train(min) 2.904 | val 2.955 (4.26 bpc) | fire 0.332
+step 01500 | train(min) 2.883 | val 2.934 (4.23 bpc) | fire 0.330
+step 01600 | train(min) 2.985 | val 2.971 (4.29 bpc) | fire 0.334
+step 01700 | train(min) 2.918 | val 2.944 (4.25 bpc) | fire 0.332
+step 01800 | train(min) 2.919 | val 2.960 (4.27 bpc) | fire 0.339
