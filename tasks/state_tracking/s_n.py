@@ -71,8 +71,14 @@ def make_batch(group, batch, length, device, generators="all", seed=None):
     token ids to sample the input stream from (the reachable states are still the
     full group).
     """
-    g = torch.Generator(device="cpu")
+    # IMPORTANT: a fresh torch.Generator() has a FIXED default seed, so creating one
+    # per call (unseeded) returns the SAME data every call -- which silently kills all
+    # averaging in eval AND makes training see one fixed batch per length. So only use
+    # an explicit generator when `seed` is given (reproducibility); otherwise fall back
+    # to the global RNG (generator=None), which advances on every call.
+    g = None
     if seed is not None:
+        g = torch.Generator(device="cpu")
         g.manual_seed(seed)
 
     if generators == "all":

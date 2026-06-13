@@ -23,11 +23,10 @@ Method notes baked into the defaults:
     affects spike mode (tanh uses its forget gate).
   * NoPE + a sequential recurrence => the model runs at ANY length, so eval at
     lengths far past training is well-defined.
-  * COMPILE IS OFF BY DEFAULT. This task feeds many sequence lengths; torch.compile
-    blows its recompile budget and was observed returning WRONG results at the unseen
-    eval lengths (the forward is provably causal in eager — see _diag_causal.py — yet
-    the compiled run had mean-L16 != pos[0:32)@L256). Opt in with --compile only after
-    verifying against eager.
+  * COMPILE IS OFF BY DEFAULT (perf, not correctness): this task feeds many sequence
+    lengths (train_lens + eval_lens + pop=1), which thrashes torch.compile's recompile
+    budget for little benefit on a sequential Python recurrence. The forward is causal
+    and correct in both paths (see _diag_causal.py); --compile opts in.
 """
 
 import argparse
@@ -127,12 +126,11 @@ def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False):
                          decay=cfg.decay).to(cfg.device).to(cfg.dtype)
     model.eval(); model.requires_grad_(False)
     if compile:
-        # CORRECTNESS WARNING: this task feeds MANY sequence lengths (train_lens +
-        # eval_lens + pop=1 at eval). That blows torch.compile's recompile budget and
-        # we observed it returning WRONG results at the unseen eval lengths (the
-        # forward is provably causal in eager, yet compiled mean-L16 != pos[0:32)@L256).
-        # So compile is OFF by default here; if you opt in, raise the budget and verify
-        # against eager (tasks/state_tracking/_diag_causal.py).
+        # PERF note: this task feeds many sequence lengths (train_lens + eval_lens +
+        # pop=1 at eval), which thrashes torch.compile's recompile budget for little
+        # benefit on a sequential Python recurrence -- hence compile is OFF by default.
+        # It is correct either way (forward is causal; see _diag_causal.py); raise the
+        # budget so all shapes specialise instead of falling back.
         import torch._dynamo as dynamo
         dynamo.config.recompile_limit = max(getattr(dynamo.config, "recompile_limit", 8), 128)
         dynamo.config.capture_scalar_outputs = True
@@ -147,7 +145,7 @@ def train(group, train_lens, eval_lens, steps, eval_every, cfg, compile=False):
           f"train_lens={train_lens} eval_lens={eval_lens} device={cfg.device}")
     chance = 1.0 / vocab
     print(f"(chance accuracy = {chance*100:.2f}%; profile '|' marks the train/extrapolation "
-          f"boundary at pos {train_max}; compile={'on' if compile else 'OFF (correctness)'})")
+          f"boundary at pos {train_max}; compile={'on' if compile else 'OFF (perf)'})")
 
     rng = torch.Generator(device="cpu")
     for step in range(1, steps + 1):
