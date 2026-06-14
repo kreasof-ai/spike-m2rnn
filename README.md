@@ -85,10 +85,18 @@ python tasks/state_tracking/train_sn.py --n 3 --mode spike --mac-free   <model/E
 `--input-decay` (continuous gate) already gives **perfect, stable S3 length-gen** —
 on par with tanh. `--mac-free` is the multiply-free version of the same.
 
-## Stage 1b — ternary `W` (BitNet) — 🚧 TODO
-Float latent master + quantize-in-forward + **per-member 2-bit materialization**
-(breaks EGGROLL's no-materialize trick — DESIGN §6.6); σ tuned to bin width. **Must
-validate against Stage 0/1a.** Isolates the BitNet cost. (No launch command yet.)
+## Stage 1b — ternary `W` (BitNet) — 🛠️ IN PROGRESS
+Float latent master + quantize-in-forward (BitNet b1.58 absmean → `{−1,0,+1}`) +
+**per-member materialization** (ternary breaks EGGROLL's no-materialize trick, so each
+member's perturbed `W` is built, quantized, used — DESIGN §6.6). The ES update on the
+float master is unchanged. The materialized path with quant *off* is bit-identical to
+`eggroll_linear` (equivalence test, guardrail #2).
+```bash
+# full multiply-free transition: ternary W . binary spikes, shift-decay, subtractive reset
+python tasks/state_tracking/train_sn.py --n 3 --mode spike --mac-free --ternary-w <flags>
+```
+Currently ternarizes the transition `_W` (the BitNet core). Watch **σ vs bin width**
+(DESIGN §6.2). Next: extend to other matrices, then Stage 2 kernel.
 
 ## Stage 2 — Triton kernel — 🚧 TODO
 Bit-packed ternary × binary spikes via AND+popcount, **in-SRAM Philox noise**, fused

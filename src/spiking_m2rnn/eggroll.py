@@ -49,6 +49,39 @@ def eggroll_linear(x, weight, A, B, bias=None, bias_noise=None,
     return out                                       # (P,B,S,O)
 
 
+def ternary_quantize(W, eps=1e-5):
+    """BitNet b1.58 absmean ternary: per-(member,tensor) scale = mean(|W|), then
+    round(W/scale) clamped to {-1,0,+1}, returned as scale * {-1,0,+1}. W: (..., O, I)."""
+    scale = W.abs().mean(dim=(-2, -1), keepdim=True).clamp_min(eps)
+    Wq = torch.round(W / scale).clamp_(-1.0, 1.0)
+    return Wq * scale
+
+
+def eggroll_linear_ternary(x, weight, A, B, bias=None, bias_noise=None,
+                           sigma=config.SIGMA, rank_scale=config.RANK_SCALE, quantize=True):
+    """Ternary EGGROLL linear (Stage 1b). Ternary breaks the no-materialize trick
+    (quantize(W + sigma A B^T) is not linear in the perturbation), so each member's
+    perturbed weight IS materialized, quantized, and used -- no shared base GEMM
+    (DESIGN 6.6). `weight` is the FLOAT latent master that ES still updates via the
+    usual sum_p f_p A_p B_p^T rule (quantization is forward-only).
+
+    x: (P,B,S,I) or (B,S,I); weight (O,I); A (P,O,r); B (P,I,r).
+    With quantize=False this is numerically identical to `eggroll_linear` -- kept as the
+    materialized reference path for the equivalence test (guardrail #2)."""
+    W_eff = weight.unsqueeze(0) + (sigma * rank_scale) * torch.einsum("por,pir->poi", A, B)  # (P,O,I)
+    if quantize:
+        W_eff = ternary_quantize(W_eff)
+    if x.dim() == 3:                                 # (B,S,I): broadcast the pop dim
+        out = torch.einsum("bsi,poi->pbso", x, W_eff)
+    else:                                            # (P,B,S,I)
+        out = torch.einsum("pbsi,poi->pbso", x, W_eff)
+    if bias is not None:
+        out = out + bias
+    if bias_noise is not None:
+        out = out + sigma * bias_noise[:, None, None, :]
+    return out
+
+
 def eggroll_ln(x, g_base, g_noise, b_base, b_noise, sigma=config.SIGMA, eps=1e-5):
     # x:(P,B,S,D). gains/biases are perturbed too: g,b become (P,D).
     mu  = x.mean(-1, keepdim=True)

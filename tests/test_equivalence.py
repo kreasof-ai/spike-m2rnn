@@ -131,8 +131,34 @@ def test_es_update_matches():
     print(f"post-update param max abs err: {max_err:.2e}")
 
 
+def test_ternary_path_materialized_reference():
+    """Guardrail #2: the Stage-1b ternary linear, with quantization DISABLED, must be
+    numerically identical to the base eggroll_linear (it just materializes the perturbed
+    weight instead of using base + low-rank correction). This pins the materialization
+    math so the only behavioural change from ternary is the quantize() itself."""
+    from spiking_m2rnn.eggroll import eggroll_linear, eggroll_linear_ternary
+
+    P, O, I, Bn, S = 5, 8, 6, 3, 4
+    torch.manual_seed(7)
+    x = torch.randn(P, Bn, S, I, dtype=DTYPE)
+    W = torch.randn(O, I, dtype=DTYPE)
+    A = torch.randn(P, O, RANK, dtype=DTYPE)
+    Bf = torch.randn(P, I, RANK, dtype=DTYPE)
+    bias = torch.randn(O, dtype=DTYPE)
+    bias_noise = torch.randn(P, O, dtype=DTYPE)
+    rs = 1.0 / math.sqrt(RANK)
+
+    base = eggroll_linear(x, W, A, Bf, bias=bias, bias_noise=bias_noise, sigma=SIGMA, rank_scale=rs)
+    tern = eggroll_linear_ternary(x, W, A, Bf, bias=bias, bias_noise=bias_noise,
+                                  sigma=SIGMA, rank_scale=rs, quantize=False)
+    err = (base - tern).abs().max().item()
+    assert err < 1e-10, f"ternary (no-quant) vs eggroll_linear mismatch: {err}"
+    print(f"ternary materialized-reference max abs err: {err:.2e}")
+
+
 if __name__ == "__main__":
     test_forward_spike()
     test_forward_tanh()
     test_es_update_matches()
+    test_ternary_path_materialized_reference()
     print("OK: modular path is numerically identical to Stage_0 reference.")
