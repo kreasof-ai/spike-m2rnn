@@ -46,7 +46,7 @@ class SpikingM2RNN(nn.Module):
     def __init__(self, vocab, dim=config.DIM, depth=config.DEPTH, k=config.K_DIM,
                  v=config.V_DIM, mlp=config.MLP_DIM, mode=config.MODE,
                  threshold=config.THRESHOLD, decay=config.DECAY, input_decay=False,
-                 mac_free=False, ternary_W=False):
+                 mac_free=False, ternary_W=False, ternary_all=False):
         super().__init__()
         self.dim, self.depth, self.k, self.v, self.mode, self.vocab = dim, depth, k, v, mode, vocab
         self.threshold, self.decay = threshold, decay
@@ -65,8 +65,12 @@ class SpikingM2RNN(nn.Module):
         # ternary_W (Stage 1b): quantize the state-transition W to {-1,0,+1} in the
         # forward (per-member, materialized), keeping a float latent master that ES
         # updates as usual. This is the BitNet core: trans = W_ternary . S(binary).
-        # Opt-in; Stage-0 path unchanged. (DESIGN 6.6 -- breaks the no-materialize trick.)
-        self.ternary_W = ternary_W
+        # ternary_all: ternarize EVERY weight matmul (embed/q/k/v/o/fc/W/head) -> a fully
+        # multiply-free model. LN gains/biases stay float. Both opt-in; Stage-0 path
+        # unchanged. (DESIGN 6.6 -- ternary breaks the no-materialize trick, so each
+        # member's perturbed weight is materialized + quantized per forward.)
+        self.ternary_W = ternary_W or ternary_all
+        self.ternary_all = ternary_all
 
         Pd = nn.ParameterDict()
         def mat(name, o, i):
@@ -109,10 +113,15 @@ class SpikingM2RNN(nn.Module):
     def zero_noise(self, device, dtype, rank=config.RANK):
         return zero_noise(self.P, rank, device, dtype)
 
+    def _is_ternary(self, name):
+        """Which weight matmuls are ternarized in the forward (float master unchanged)."""
+        return self.ternary_all or (self.ternary_W and name.endswith("_W"))
+
     def _lin(self, x, name, noise, sigma):
         A, B = noise[name + "_w"]
-        return eggroll_linear(x, self.P[name + "_w"], A, B,
-                              bias=self.P[name + "_b"], bias_noise=noise[name + "_b"], sigma=sigma)
+        lin = eggroll_linear_ternary if self._is_ternary(name) else eggroll_linear
+        return lin(x, self.P[name + "_w"], A, B,
+                   bias=self.P[name + "_b"], bias_noise=noise[name + "_b"], sigma=sigma)
 
     def _ln(self, x, name, noise, sigma):
         return eggroll_ln(x, self.P[name + "_g"], noise[name + "_g"],
@@ -157,13 +166,7 @@ class SpikingM2RNN(nn.Module):
             for t in range(Tn):
                 kt = Kp[:, :, t, :]; vt = Vp[:, :, t, :]; qt = Q[:, :, t, :]
                 outer = torch.einsum("pbk,pbv->pbkv", kt, vt)                      # k_t (x) v_t
-                if self.ternary_W:                                                 # BitNet transition (Stage 1b)
-                    A, Bw = noise[p + "_W_w"]
-                    trans = eggroll_linear_ternary(state, self.P[p + "_W_w"], A, Bw,
-                                                   bias=self.P[p + "_W_b"],
-                                                   bias_noise=noise[p + "_W_b"], sigma=sigma)
-                else:
-                    trans = self._lin(state, p + "_W", noise, sigma)               # transition on PREVIOUS state
+                trans = self._lin(state, p + "_W", noise, sigma)                   # transition (ternary if enabled)
                 if self.mode == "spike":
                     decay = d_t[:, :, t, :].unsqueeze(-1) if self.input_decay else self.decay  # (P,B,1,1) | scalar
                     mem = decay * mem + trans + outer
