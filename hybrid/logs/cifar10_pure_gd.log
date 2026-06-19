@@ -1,0 +1,44 @@
+!python -u spike-m2rnn/hybrid/train.py --dataset cifar10 --pure-gd | tee -a cifar10_pure_gd.log
+
+hybrid ViT | cifar10 | dim=64 depth=2 | ternary=True rank=4 | base(ternary) params=78k  residual(fp) params=8.5k (10.8% of base) | gd-opt=rmsnorm | dev=cuda
+[pure-gd] step     1 | loss 2.3962 | val 13.04% | 3s
+[pure-gd] step    50 | loss 2.2184 | val 17.30% | 7s
+[pure-gd] step   100 | loss 2.1245 | val 24.09% | 12s
+[pure-gd] step   150 | loss 1.9878 | val 25.88% | 16s
+[pure-gd] step   200 | loss 1.9394 | val 26.00% | 20s
+[pure-gd] step   250 | loss 2.0133 | val 27.21% | 24s
+[pure-gd] step   300 | loss 1.9933 | val 28.56% | 28s
+[pure-gd] step   350 | loss 1.8946 | val 28.13% | 32s
+[pure-gd] step   400 | loss 1.8853 | val 29.98% | 37s
+[pure-gd] step   450 | loss 1.9421 | val 29.89% | 41s
+[pure-gd] step   500 | loss 1.8702 | val 30.77% | 45s
+[pure-gd] step   550 | loss 1.9875 | val 31.05% | 49s
+[pure-gd] step   600 | loss 1.9300 | val 31.32% | 53s
+[pure-gd] step   650 | loss 1.7490 | val 32.16% | 57s
+[pure-gd] step   700 | loss 2.0321 | val 32.58% | 62s
+[pure-gd] step   750 | loss 1.8031 | val 32.00% | 66s
+[pure-gd] step   800 | loss 1.8854 | val 33.74% | 70s
+[pure-gd] step   850 | loss 1.8915 | val 34.38% | 74s
+[pure-gd] step   900 | loss 1.8748 | val 34.14% | 78s
+[pure-gd] step   950 | loss 1.8038 | val 34.13% | 82s
+[pure-gd] step  1000 | loss 1.7141 | val 34.80% | 87s
+[pure-gd] step  1050 | loss 1.6199 | val 34.34% | 91s
+[pure-gd] step  1100 | loss 1.8780 | val 34.59% | 95s
+[pure-gd] step  1150 | loss 1.8236 | val 35.14% | 99s
+[pure-gd] step  1200 | loss 1.7645 | val 35.41% | 103s
+[pure-gd] step  1250 | loss 1.7040 | val 35.87% | 107s
+[pure-gd] step  1300 | loss 1.7897 | val 35.95% | 111s
+[pure-gd] step  1350 | loss 1.8272 | val 36.74% | 114s
+[pure-gd] step  1400 | loss 1.6939 | val 36.97% | 117s
+[pure-gd] step  1450 | loss 1.7801 | val 36.86% | 121s
+[pure-gd] step  1500 | loss 1.6919 | val 36.66% | 125s
+[pure-gd] step  1550 | loss 1.6264 | val 36.79% | 128s
+[pure-gd] step  1600 | loss 1.7952 | val 36.72% | 132s
+[pure-gd] step  1650 | loss 1.6473 | val 37.30% | 136s
+[pure-gd] step  1700 | loss 1.6762 | val 37.13% | 139s
+[pure-gd] step  1750 | loss 1.6742 | val 37.76% | 142s
+[pure-gd] step  1800 | loss 1.5962 | val 37.63% | 146s
+[pure-gd] step  1850 | loss 1.5611 | val 38.23% | 150s
+[pure-gd] step  1900 | loss 1.7755 | val 38.46% | 153s
+[pure-gd] step  1950 | loss 1.6388 | val 38.41% | 157s
+[pure-gd] step  2000 | loss 1.7912 | val 37.94% | 161s

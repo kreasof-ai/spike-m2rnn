@@ -1,0 +1,12 @@
+task=S3 vocab=6 mode=spike params=145,358 pop=512 sigma=0.1 decay=1.0 membrane=int(theta=10,outer_gain=10) ternary=all update=es(lr=0.05) train_lens=[8, 16] eval_lens=[16, 32, 64, 128] gens=2 device=cuda
+(chance accuracy = 16.67%; profile '|' marks the train/extrapolation boundary at pos 16; compile=OFF (perf))
+step 00001 | loss 1.761 | mean L16: 13.8%  L32: 15.2%  L64: 16.2%  L128: 16.6%
+            pos@L128: [0:16)  14% |[16:32)  17% [32:64)  17% [64:128)  17%
+step 00050 | loss 1.640 | mean L16: 26.5%  L32: 21.6%  L64: 19.1%  L128: 17.8%
+            pos@L128: [0:16)  27% |[16:32)  17% [32:64)  17% [64:128)  17%
+step 00100 | loss 1.597 | mean L16: 27.0%  L32: 21.7%  L64: 19.2%  L128: 17.9%
+            pos@L128: [0:16)  27% |[16:32)  17% [32:64)  17% [64:128)  17%
+step 00150 | loss 1.690 | mean L16: 23.7%  L32: 20.2%  L64: 18.4%  L128: 17.6%
+            pos@L128: [0:16)  24% |[16:32)  17% [32:64)  17% [64:128)  17%
+step 00200 | loss 1.546 | mean L16: 24.0%  L32: 20.2%  L64: 18.5%  L128: 17.6%
+            pos@L128: [0:16)  24% |[16:32)  17% [32:64)  17% [64:128)  17%

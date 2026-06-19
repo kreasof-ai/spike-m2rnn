@@ -1,0 +1,44 @@
+!python -u spike-m2rnn/hybrid/train.py --dataset mnist --rank 0 --pop 512 | tee -a mnist_rank_0_pop512.log
+
+hybrid ViT | mnist | dim=64 depth=2 | ternary=True rank=0 | base(ternary) params=69k  residual(fp) params=0.0k (0.0% of base) | gd-opt=rmsnorm | dev=cuda
+step     1 | es-min 2.2529 | es-mean 2.3812 | val 15.99% | es-evals 0.0M | 3s
+step    50 | es-min 2.1534 | es-mean 2.3133 | val 10.26% | es-evals 0.0M | 16s
+step   100 | es-min 1.8118 | es-mean 2.0291 | val 33.90% | es-evals 0.1M | 30s
+step   150 | es-min 1.4199 | es-mean 1.6609 | val 44.08% | es-evals 0.1M | 44s
+step   200 | es-min 1.2188 | es-mean 1.5415 | val 49.92% | es-evals 0.1M | 57s
+step   250 | es-min 1.1328 | es-mean 1.4325 | val 52.79% | es-evals 0.1M | 71s
+step   300 | es-min 1.0861 | es-mean 1.3645 | val 55.95% | es-evals 0.2M | 84s
+step   350 | es-min 0.8663 | es-mean 1.1537 | val 63.34% | es-evals 0.2M | 97s
+step   400 | es-min 1.0454 | es-mean 1.3231 | val 62.80% | es-evals 0.2M | 110s
+step   450 | es-min 0.9374 | es-mean 1.1960 | val 65.79% | es-evals 0.2M | 124s
+step   500 | es-min 0.9902 | es-mean 1.3554 | val 64.78% | es-evals 0.3M | 138s
+step   550 | es-min 1.0635 | es-mean 1.4218 | val 66.59% | es-evals 0.3M | 151s
+step   600 | es-min 1.0218 | es-mean 1.3157 | val 67.02% | es-evals 0.3M | 165s
+step   650 | es-min 0.9865 | es-mean 1.2336 | val 67.33% | es-evals 0.3M | 179s
+step   700 | es-min 0.9784 | es-mean 1.2798 | val 68.73% | es-evals 0.4M | 193s
+step   750 | es-min 0.7493 | es-mean 1.0121 | val 69.48% | es-evals 0.4M | 206s
+step   800 | es-min 0.8546 | es-mean 1.1278 | val 71.71% | es-evals 0.4M | 220s
+step   850 | es-min 0.7503 | es-mean 0.9940 | val 71.93% | es-evals 0.4M | 233s
+step   900 | es-min 0.7274 | es-mean 1.0232 | val 70.01% | es-evals 0.5M | 247s
+step   950 | es-min 0.7343 | es-mean 0.9965 | val 70.83% | es-evals 0.5M | 260s
+step  1000 | es-min 0.7477 | es-mean 1.0331 | val 70.36% | es-evals 0.5M | 273s
+step  1050 | es-min 0.6146 | es-mean 0.9111 | val 72.94% | es-evals 0.5M | 287s
+step  1100 | es-min 0.9903 | es-mean 1.2854 | val 72.79% | es-evals 0.6M | 301s
+step  1150 | es-min 0.6177 | es-mean 0.8759 | val 76.64% | es-evals 0.6M | 314s
+step  1200 | es-min 0.5809 | es-mean 0.7975 | val 76.45% | es-evals 0.6M | 328s
+step  1250 | es-min 0.9436 | es-mean 1.2463 | val 75.93% | es-evals 0.6M | 342s
+step  1300 | es-min 0.5565 | es-mean 0.7469 | val 75.66% | es-evals 0.7M | 356s
+step  1350 | es-min 0.6253 | es-mean 0.8524 | val 75.39% | es-evals 0.7M | 369s
+step  1400 | es-min 0.6504 | es-mean 0.8374 | val 76.04% | es-evals 0.7M | 383s
+step  1450 | es-min 0.5903 | es-mean 0.8799 | val 77.59% | es-evals 0.7M | 396s
+step  1500 | es-min 0.5783 | es-mean 0.8227 | val 77.06% | es-evals 0.8M | 410s
+step  1550 | es-min 0.7516 | es-mean 1.0527 | val 77.36% | es-evals 0.8M | 423s
+step  1600 | es-min 0.5142 | es-mean 0.7167 | val 77.62% | es-evals 0.8M | 436s
+step  1650 | es-min 0.5380 | es-mean 0.7715 | val 77.25% | es-evals 0.8M | 450s
+step  1700 | es-min 0.6645 | es-mean 0.8596 | val 77.98% | es-evals 0.9M | 464s
+step  1750 | es-min 0.4594 | es-mean 0.6725 | val 78.28% | es-evals 0.9M | 478s
+step  1800 | es-min 0.6090 | es-mean 0.8319 | val 75.88% | es-evals 0.9M | 492s
+step  1850 | es-min 0.6837 | es-mean 0.9720 | val 78.98% | es-evals 0.9M | 505s
+step  1900 | es-min 0.4442 | es-mean 0.6318 | val 80.46% | es-evals 1.0M | 519s
+step  1950 | es-min 0.4866 | es-mean 0.6989 | val 79.51% | es-evals 1.0M | 532s
+step  2000 | es-min 0.5727 | es-mean 0.7511 | val 78.27% | es-evals 1.0M | 546s
