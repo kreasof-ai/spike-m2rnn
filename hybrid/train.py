@@ -184,6 +184,85 @@ def train_hybrid(model, tr, te, args, device, dtype):
                   f"| val {acc:.2f}% {extra}| es-evals {es_evals/1e6:.1f}M | {time.time()-t0:.0f}s")
 
 
+# ============================ adaptive hybrid trainer ============================
+def train_adaptive(model, tr, te, args, device, dtype):
+    """Self-regulating GD gate + POP ramp (block coordinate descent with a trust region).
+
+    Each step, with probability p_gd, ATTEMPT a GD move: grow the residual by gradient, then
+    FOLD it into the ternary base and KEEP the fold only if it lowers base-only loss on a
+    held-out probe (i.e. the gradient-proposed ternary flips actually help); else roll the
+    base back. The fold makes the proposal a concrete, testable base change -- and it
+    self-anneals: once the base is good, the small rank-r residual no longer crosses any
+    quantization boundary, folds become no-ops, and GD dies out on its own.
+
+    Feedback:  reject -> p_gd *= down (harder to pick GD);  accept -> p_gd recovers slowly.
+    POP ramp:  pop scales pop_min -> pop_max as p_gd falls (cheap while GD warms up, large-pop
+    ES to sharpen the asymptote late). One signal drives the filter, the anneal, and the ramp.
+    """
+    rank_scale = 1.0 / math.sqrt(args.es_rank)
+    it = inf_batches(tr, device, dtype)
+    probe_it = inf_batches(tr, device, dtype)              # independent batches for the trust test
+    p_gd = args.pgd_init
+    t0 = time.time()
+    es_evals = 0
+    win_attempt = win_accept = 0                            # accept stats over the logging window
+
+    def cur_pop():
+        raw = args.pop_min + (args.pop_max - args.pop_min) * (1.0 - p_gd)
+        step = max(args.chunk, 1)
+        return max(args.pop_min, int(round(raw / step) * step))
+
+    for step in range(1, args.steps + 1):
+        data, target = next(it)
+        pop = cur_pop()
+
+        # ---------------- ES block (pop varies with the gate) ----------------
+        coeff = args.lr / (pop * args.sigma)
+        noise = model.sample_noise(pop, args.es_rank, device, dtype)
+        if args.chunk and args.chunk < pop:
+            parts = []
+            for s in range(0, pop, args.chunk):
+                sub = {k: (tuple(t[s:s+args.chunk] for t in v) if isinstance(v, tuple)
+                           else v[s:s+args.chunk]) for k, v in noise.items()}
+                parts.append(per_member_loss(model.es_forward(data, sub, args.sigma, rank_scale), target))
+            loss = torch.cat(parts)
+        else:
+            loss = per_member_loss(model.es_forward(data, noise, args.sigma, rank_scale), target)
+        fit = fitness_from_loss(loss).to(dtype)
+        es_update(model.P, noise, fit, coeff, rank_scale)
+        es_evals += pop
+
+        # ---------------- gated GD block (trust-region fold) ----------------
+        if model.rank and not args.no_gd and torch.rand(1).item() < p_gd:
+            win_attempt += 1
+            pdata, ptarget = next(probe_it)
+            with torch.no_grad():
+                l_before = F.cross_entropy(model.gd_forward(pdata, use_residual=False), ptarget).item()
+            snap = model.snapshot_base()
+            for _ in range(args.gd_steps):                 # grow residual from 0 by gradient
+                gd_loss = F.cross_entropy(model.gd_forward(data), target)
+                gd_loss.backward()
+                stateless_gd_step(model.gd_params(), args.gd_lr, args.gd_opt)
+            model.fold_residual()                           # commit proposal into the base, reset residual
+            with torch.no_grad():
+                l_after = F.cross_entropy(model.gd_forward(pdata, use_residual=False), ptarget).item()
+            if l_after <= l_before - args.accept_margin:    # the flips helped -> keep
+                p_gd = min(1.0, p_gd * args.pgd_up)
+                win_accept += 1
+            else:                                           # harmful/useless -> roll back, distrust GD
+                model.restore_base(snap)
+                p_gd *= args.pgd_down
+
+        # ---------------- logging / eval ----------------
+        if step % args.eval_every == 0 or step == 1:
+            acc = evaluate(model, te, device, dtype, model.rank)   # residual ~0 (folded) so == base
+            rate = win_accept / max(win_attempt, 1)
+            print(f"step {step:5d} | es-min {loss.min().item():.4f} | val {acc:.2f}% "
+                  f"| p_gd {p_gd:.3f} | pop {pop} | gd-accept {rate:.2f} ({win_accept}/{win_attempt}) "
+                  f"| es-evals {es_evals/1e6:.1f}M | {time.time()-t0:.0f}s")
+            win_attempt = win_accept = 0
+
+
 # ============================ main ============================
 def main():
     ap = argparse.ArgumentParser()
@@ -210,6 +289,14 @@ def main():
     ap.add_argument("--gd-steps", type=int, default=1)
     ap.add_argument("--no-gd", action="store_true", help="freeze residual (pure ES with dead scaffold)")
     ap.add_argument("--fold-every", type=int, default=0, help="fold residual into base every N steps (0=off)")
+    # adaptive controller (self-regulating GD gate + POP ramp)
+    ap.add_argument("--adaptive", action="store_true", help="gated trust-region GD with annealing + POP ramp")
+    ap.add_argument("--pgd-init", type=float, default=1.0, help="initial P(attempt GD)")
+    ap.add_argument("--pgd-down", type=float, default=0.9, help="multiply p_gd on a rejected GD fold")
+    ap.add_argument("--pgd-up", type=float, default=1.02, help="multiply p_gd on an accepted GD fold")
+    ap.add_argument("--accept-margin", type=float, default=0.0, help="min base-loss drop to accept a fold")
+    ap.add_argument("--pop-min", type=int, default=512, help="POP when GD is fully on (p_gd=1)")
+    ap.add_argument("--pop-max", type=int, default=4096, help="POP when GD is off (p_gd=0)")
     # modes
     ap.add_argument("--pure-gd", action="store_true", help="standard full backprop baseline (ES off)")
     ap.add_argument("--dtype", choices=["float32", "float16", "bfloat16"], default="float32")
@@ -238,7 +325,12 @@ def main():
         model.requires_grad_(False)
         for p in model.gd_params():                        # only the residual needs grad
             p.requires_grad_(True)
-        train_hybrid(model, tr, te, args, device, dtype)
+        if args.adaptive:
+            print(f"adaptive | p_gd init={args.pgd_init} down={args.pgd_down} up={args.pgd_up} "
+                  f"| pop {args.pop_min}->{args.pop_max} | margin={args.accept_margin}")
+            train_adaptive(model, tr, te, args, device, dtype)
+        else:
+            train_hybrid(model, tr, te, args, device, dtype)
 
 
 if __name__ == "__main__":

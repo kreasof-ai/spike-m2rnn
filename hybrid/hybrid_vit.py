@@ -187,16 +187,19 @@ class HybridViT(nn.Module):
         return lin(x[:, :, 0:1, :], "head").squeeze(2)     # (P,B,C)
 
     # =================== GD forward (single, grad on U,V only) ===================
-    def gd_forward(self, x_img):
+    def gd_forward(self, x_img, use_residual=True):
         """Single-member forward on the BASE (mean) weights. The ternary base is detached
-        (frozen this phase); gradient flows only into the residual factors U,V."""
+        (frozen this phase); gradient flows only into the residual factors U,V.
+        `use_residual=False` -> base-only forward (residual ignored): the adaptive controller
+        uses it to measure whether the TERNARY BASE alone has improved (the harm/health signal)."""
         D, h = self.dim, self.heads
+        resid = use_residual and self.rank
 
         def lin(x, name):
             W = self.P[name + "_w"]
             Wq = ternary_quantize(W) if self.ternary else W
             out = F.linear(x, Wq.detach())                 # base frozen
-            if self.rank:
+            if resid:
                 out = out + self._residual(x, name)        # grad flows to U,V
             return out + self.P[name + "_b"].detach()
 
@@ -249,6 +252,16 @@ class HybridViT(nn.Module):
         return x
 
     # =================== fold (crystallize residual into the ternary base) ===================
+    @torch.no_grad()
+    def snapshot_base(self):
+        """Clone the ternary latent masters so a tentative fold can be rolled back."""
+        return {name: self.P[name + "_w"].data.clone() for name, _, _ in self._wnames}
+
+    @torch.no_grad()
+    def restore_base(self, snap):
+        for name, t in snap.items():
+            self.P[name + "_w"].data.copy_(t)
+
     @torch.no_grad()
     def fold_residual(self):
         """W_latent += U Vᵀ, then reset the residual to 0. The next forward re-ternarizes

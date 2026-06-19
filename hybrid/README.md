@@ -85,6 +85,33 @@ ES forwards dominate) than pure-ES ternary, *while* `ternary-only` accuracy stay
 `val` (the base stays load-bearing). If only `val` moves and `ternary-only` lags, the residual
 is carrying the model — tighten `rank` / enable fold.
 
+## Adaptive controller (`--adaptive`) — self-regulating GD gate + POP ramp
+
+Motivated by the 42-run finding: GD gives a large *early* sample-efficiency boost but a worse
+*asymptote*, and the persistent residual monopolizes/destabilizes unless folded. The adaptive
+mode makes the warmup→handoff automatic instead of a fixed schedule.
+
+Each step, with probability `p_gd`, **attempt** a GD move: grow the residual by gradient, fold
+it into the ternary base, and **keep the fold only if base-only loss on a held-out probe drops**
+(the gradient-proposed ternary flips actually helped). Else roll the base back.
+
+- **Filter** — `Bernoulli(p_gd)` plus the accept/reject trust test decide whether GD is applied.
+- **Harm feedback** — reject ⇒ `p_gd *= --pgd-down` (harder to pick GD); accept ⇒ slow recovery
+  (`--pgd-up`). GD that stops helping gets squeezed out.
+- **Anneal (emergent)** — once the base is good, a small rank-r residual no longer crosses any
+  quantization boundary when folded, so folds become no-ops, rejections pile up, `p_gd → 0`.
+  Quantization resolution *is* the annealing schedule; late training is pure ES.
+- **POP ramp** — `pop` scales `--pop-min → --pop-max` as `p_gd` falls: cheap small-pop while GD
+  carries the warmup, large-pop ES to chase the asymptote (the `rank0_pop4096` regime that won).
+
+```bash
+python hybrid/train.py --dataset mnist --adaptive --pop-min 1024 --pop-max 4096
+```
+
+Log adds `p_gd`, current `pop`, and `gd-accept` rate. The thing to watch: a fast warmup (high
+accept, small pop) that automatically transitions to large-pop pure-ES as accepts dry up —
+ideally beating *both* a fixed pure-ES run and the fixed fold-1 hybrid.
+
 ## Files
 
 - `hybrid_vit.py` — `HybridViT` (`es_forward` population path, `gd_forward` single/grad path,
