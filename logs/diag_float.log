@@ -1,0 +1,22 @@
+task=S3 vocab=6 mode=spike params=73,162 pop=512 sigma=0.05 decay=shift-decay 2^-s + subtractive reset (MAC-free) membrane=float ternary=all update=es(lr=0.05) train_lens=[8, 16] eval_lens=[16, 32, 64] gens=2 device=cuda
+(chance accuracy = 16.67%; profile '|' marks the train/extrapolation boundary at pos 16; compile=OFF (perf))
+step 00001 | loss 1.805 | mean L16: 18.6%  L32: 17.5%  L64: 17.2%
+            pos@L64: [0:16)  18% |[16:32)  17% [32:64)  17%
+step 00050 | loss 1.546 | mean L16: 26.8%  L32: 21.5%  L64: 19.3%
+            pos@L64: [0:16)  27% |[16:32)  17% [32:64)  17%
+step 00100 | loss 1.448 | mean L16: 33.5%  L32: 24.8%  L64: 20.9%
+            pos@L64: [0:16)  33% |[16:32)  16% [32:64)  17%
+step 00150 | loss 1.587 | mean L16: 27.6%  L32: 21.8%  L64: 19.5%
+            pos@L64: [0:16)  28% |[16:32)  17% [32:64)  17%
+step 00200 | loss 1.279 | mean L16: 30.6%  L32: 23.7%  L64: 20.2%
+            pos@L64: [0:16)  31% |[16:32)  17% [32:64)  17%
+step 00250 | loss 1.216 | mean L16: 30.4%  L32: 23.3%  L64: 20.0%
+            pos@L64: [0:16)  30% |[16:32)  17% [32:64)  17%
+step 00300 | loss 1.154 | mean L16: 33.5%  L32: 25.2%  L64: 21.0%
+            pos@L64: [0:16)  34% |[16:32)  17% [32:64)  17%
+step 00350 | loss 1.470 | mean L16: 35.1%  L32: 25.8%  L64: 21.4%
+            pos@L64: [0:16)  35% |[16:32)  17% [32:64)  17%
+step 00400 | loss 1.042 | mean L16: 37.0%  L32: 26.8%  L64: 21.7%
+            pos@L64: [0:16)  37% |[16:32)  17% [32:64)  17%
+step 00450 | loss 1.406 | mean L16: 38.2%  L32: 27.7%  L64: 21.9%
+            pos@L64: [0:16)  38% |[16:32)  17% [32:64)  17%

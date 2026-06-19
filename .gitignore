@@ -4,7 +4,6 @@ __pycache__/
 data/**/*.bin
 data/**/input.txt
 input.txt
-*.log
 out*/
 checkpoints/
 *.pt
